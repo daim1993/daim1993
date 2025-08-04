@@ -1,0 +1,90 @@
+import bpy
+import math
+
+# --- Settings ---
+ball_speed = 0.2                 # Blender units per frame
+arc_height_factor = 0.4         # Controls arc curve steepness
+start_frame = 1
+num_bars = 8
+
+# --- Cleanup ---
+bpy.ops.object.select_all(action='SELECT')
+bpy.ops.object.delete(use_global=False)
+
+# --- Create Bars with Parenting Chain ---
+bars = []
+previous_bar = None
+for i in range(num_bars):
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(i * 3.0, 0, 0.1))
+    bar = bpy.context.active_object
+    bar.name = f"Bar_{i}"
+    bar.scale.z = 0.2
+    bars.append(bar)
+
+    if previous_bar:
+        bar.parent = previous_bar
+        bar.matrix_parent_inverse = previous_bar.matrix_world.inverted()
+
+    previous_bar = bar
+
+# --- Create Ball ---
+bpy.ops.mesh.primitive_uv_sphere_add(radius=0.3, location=(0, 0, 1))
+ball = bpy.context.active_object
+ball.name = "Ball"
+
+# --- Define Jump Sequence ---
+jump_sequence = []
+for i in range(num_bars - 1):
+    jump_sequence.append({
+        "from": f"Bar_{i}",
+        "to": f"Bar_{i+1}",
+    })
+
+# --- Frame Handler ---
+def update_ball(scene):
+    frame = scene.frame_current
+    ball = bpy.data.objects.get("Ball")
+    if not ball:
+        return
+
+    time_cursor = start_frame
+
+    for jump in jump_sequence:
+        bar1 = bpy.data.objects.get(jump["from"])
+        bar2 = bpy.data.objects.get(jump["to"])
+        if not bar1 or not bar2:
+            continue
+
+        # Live positions
+        p1 = bar1.matrix_world.translation
+        p2 = bar2.matrix_world.translation
+        dist = (p2 - p1).length
+
+        duration = max(2, int(dist / ball_speed))
+        end_frame = time_cursor + duration
+
+        if time_cursor <= frame <= end_frame:
+            # Normalized time
+            t = (frame - time_cursor) / duration
+            t = max(0.0, min(1.0, t))
+
+            # Interpolate XY
+            x = (1 - t) * p1.x + t * p2.x
+            y = (1 - t) * p1.y + t * p2.y
+
+            # Arc Z scaled by distance
+            base_z = (1 - t) * p1.z + t * p2.z
+            arc_peak = arc_height_factor * dist  # Arc height grows with distance
+            arc_z = 4 * arc_peak * t * (1 - t)
+            z = base_z + arc_z
+
+            ball.location = (x, y, z)
+            return
+
+        time_cursor = end_frame
+
+# --- Register Handler ---
+bpy.app.handlers.frame_change_pre.clear()
+bpy.app.handlers.frame_change_pre.append(update_ball)
+
+print("✅ Arc height now scales with jump speed — natural motion achieved.")
