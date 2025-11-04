@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kinetic Screen 3D</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        
+        #container {
+            position: relative;
+            width: 2304px;
+            height: 1024px;
+            perspective: 2000px;
+            background: #000;
+        }
+        
+        #grid {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+        }
+        
+        .box {
+            position: absolute;
+            width: 128px;
+            height: 128px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            transform-style: preserve-3d;
+            transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        
+        .box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
+            pointer-events: none;
+        }
+        
+        .box-shadow {
+            position: absolute;
+            width: 128px;
+            height: 128px;
+            background: radial-gradient(ellipse at center, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 70%);
+            filter: blur(15px);
+            transform: translateZ(-1px);
+            opacity: 0;
+            transition: opacity 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        .box.active {
+            background: #fff;
+        }
+        
+        .box.active .box-shadow {
+            opacity: 1;
+        }
+        
+        #controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border-radius: 8px;
+            color: #fff;
+            font-family: monospace;
+        }
+        
+        button {
+            background: #fff;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        
+        button:hover {
+            background: #ddd;
+        }
+        
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        
+        #info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <div>Kinetic Screen 3D - 18×8 Grid (2304×1024px)</div>
+        <button onclick="startAnimation()">Start Animation</button>
+        <button onclick="stopAnimation()">Stop</button>
+        <button onclick="resetAnimation()">Reset</button>
+        <div style="margin-top: 10px;">
+            <label>Upload Choreography Video (MP4):</label>
+            <input type="file" id="videoInput" accept="video/mp4" onchange="loadVideo(event)">
+        </div>
+        <div>
+            <label>Pop Height: </label>
+            <input type="range" id="popHeight" min="50" max="400" value="200" oninput="updatePopHeight(this.value)">
+            <span id="popValue">200px</span>
+        </div>
+        <div id="info">
+            Each box: 128×128px | Total: 2304×1024px<br>
+            45° lighting applied | Shadows enabled
+        </div>
+    </div>
+
+    <div id="container">
+        <div id="grid"></div>
+    </div>
+    
+    <video id="hiddenVideo" style="display:none;"></video>
+    <canvas id="videoCanvas" style="display:none;"></canvas>
+
+    <script>
+        const COLS = 18;
+        const ROWS = 8;
+        const BOX_SIZE = 128;
+        let popHeight = 200;
+        let animationFrame;
+        let videoElement;
+        let canvas;
+        let ctx;
+        let isPlaying = false;
+
+        // Create grid
+        const grid = document.getElementById('grid');
+        const boxes = [];
+        
+        for (let row = 0; row < ROWS; row++) {
+            for (let col = 0; col < COLS; col++) {
+                const boxContainer = document.createElement('div');
+                boxContainer.style.position = 'absolute';
+                boxContainer.style.left = (col * BOX_SIZE) + 'px';
+                boxContainer.style.top = (row * BOX_SIZE) + 'px';
+                boxContainer.style.width = BOX_SIZE + 'px';
+                boxContainer.style.height = BOX_SIZE + 'px';
+                boxContainer.style.transformStyle = 'preserve-3d';
+                
+                const shadow = document.createElement('div');
+                shadow.className = 'box-shadow';
+                boxContainer.appendChild(shadow);
+                
+                const box = document.createElement('div');
+                box.className = 'box';
+                box.dataset.row = row;
+                box.dataset.col = col;
+                boxContainer.appendChild(box);
+                
+                grid.appendChild(boxContainer);
+                boxes.push({ element: box, shadow: shadow, container: boxContainer, row, col });
+            }
+        }
+
+        function updatePopHeight(value) {
+            popHeight = parseInt(value);
+            document.getElementById('popValue').value = value + 'px';
+        }
+
+        function loadVideo(event) {
+            const file = event.target.files[0];
+            if (file) {
+                videoElement = document.getElementById('hiddenVideo');
+                canvas = document.getElementById('videoCanvas');
+                ctx = canvas.getContext('2d');
+                
+                const url = URL.createObjectURL(file);
+                videoElement.src = url;
+                videoElement.load();
+                
+                videoElement.onloadedmetadata = () => {
+                    canvas.width = COLS;
+                    canvas.height = ROWS;
+                    alert('Video loaded! Click "Start Animation" to begin.');
+                };
+            }
+        }
+
+        function getVideoFrame() {
+            if (!videoElement || !ctx) return null;
+            
+            ctx.drawImage(videoElement, 0, 0, COLS, ROWS);
+            const imageData = ctx.getImageData(0, 0, COLS, ROWS);
+            return imageData.data;
+        }
+
+        function animate() {
+            if (!isPlaying) return;
+            
+            const frameData = getVideoFrame();
+            
+            if (frameData) {
+                boxes.forEach((boxObj, index) => {
+                    const row = boxObj.row;
+                    const col = boxObj.col;
+                    const pixelIndex = (row * COLS + col) * 4;
+                    
+                    // Get brightness (average of RGB)
+                    const r = frameData[pixelIndex];
+                    const g = frameData[pixelIndex + 1];
+                    const b = frameData[pixelIndex + 2];
+                    const brightness = (r + g + b) / 3 / 255;
+                    
+                    // Calculate pop depth
+                    const depth = brightness * popHeight;
+                    
+                    // Apply 3D transform with 45° lighting angle
+                    const rotateX = -5; // Slight tilt for better 3D effect
+                    const rotateY = 5;
+                    
+                    boxObj.container.style.transform = `
+                        translateZ(${depth}px)
+                        rotateX(${rotateX}deg)
+                        rotateY(${rotateY}deg)
+                    `;
+                    
+                    // Update box appearance
+                    if (brightness > 0.5) {
+                        boxObj.element.classList.add('active');
+                    } else {
+                        boxObj.element.classList.remove('active');
+                    }
+                    
+                    // Update shadow based on depth
+                    const shadowOpacity = brightness * 0.8;
+                    const shadowSize = 1 + (brightness * 0.5);
+                    boxObj.shadow.style.opacity = shadowOpacity;
+                    boxObj.shadow.style.transform = `translateZ(-1px) scale(${shadowSize})`;
+                });
+            }
+            
+            animationFrame = requestAnimationFrame(animate);
+        }
+
+        function startAnimation() {
+            if (!videoElement) {
+                alert('Please upload a choreography video first!');
+                return;
+            }
+            
+            isPlaying = true;
+            videoElement.play();
+            animate();
+        }
+
+        function stopAnimation() {
+            isPlaying = false;
+            if (videoElement) {
+                videoElement.pause();
+            }
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+            }
+        }
+
+        function resetAnimation() {
+            stopAnimation();
+            if (videoElement) {
+                videoElement.currentTime = 0;
+            }
+            boxes.forEach(boxObj => {
+                boxObj.container.style.transform = 'translateZ(0px)';
+                boxObj.element.classList.remove('active');
+                boxObj.shadow.style.opacity = 0;
+            });
+        }
+
+        // Demo animation if no video loaded
+        function demoWave() {
+            const time = Date.now() * 0.001;
+            boxes.forEach(boxObj => {
+                const x = boxObj.col / COLS;
+                const y = boxObj.row / ROWS;
+                const wave = Math.sin(x * Math.PI * 2 + time) * Math.cos(y * Math.PI * 2 + time);
+                const brightness = (wave + 1) / 2;
+                const depth = brightness * popHeight;
+                
+                boxObj.container.style.transform = `translateZ(${depth}px)`;
+                boxObj.shadow.style.opacity = brightness * 0.8;
+                
+                if (brightness > 0.5) {
+                    boxObj.element.classList.add('active');
+                } else {
+                    boxObj.element.classList.remove('active');
+                }
+            });
+            
+            requestAnimationFrame(demoWave);
+        }
+
+        // Start demo wave on load
+        demoWave();
+    </script>
+</body>
+</html>

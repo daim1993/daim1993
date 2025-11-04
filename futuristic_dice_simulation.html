@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Martingale Streak Simulator • Futuristic UI</title>
+  <style>
+    :root{
+      --bg:#0c0f14; --panel:#121826; --panel-2:#0f1420; --text:#e6f1ff;
+      --muted:#8aa4c2; --accent:#6ee7ff; --accent-2:#7c3aed; --danger:#ff5d6c; --success:#2ee6a6;
+      --grid:rgba(110,231,255,0.06); --shadow:0 10px 30px rgba(0,0,0,.4);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1200px 800px at 10% -10%, rgba(124,58,237,.12), transparent 40%),
+      radial-gradient(1200px 900px at 110% -30%, rgba(110,231,255,.10), transparent 45%),var(--bg);
+      color:var(--text);font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";}
+    .wrap{max-width:1200px;margin:40px auto;padding:0 20px}
+    header{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:18px}
+    .title{font-weight:800;letter-spacing:.4px;display:flex;align-items:center;gap:12px}
+    .title .dot{width:12px;height:12px;border-radius:50%;background:conic-gradient(from 0deg, var(--accent), var(--accent-2));box-shadow:0 0 30px var(--accent)}
+    .subtitle{color:var(--muted);font-size:14px;margin-top:4px}
+
+    .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
+
+    .card{background:linear-gradient(180deg, rgba(255,255,255,.02), transparent 40%),var(--panel);
+      border:1px solid rgba(110,231,255,.12);border-radius:16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+    .card::before{content:"";position:absolute;inset:0;background-image:linear-gradient(0deg, transparent 0 48%, var(--grid) 48% 52%, transparent 52%),
+      linear-gradient(90deg, transparent 0 48%, var(--grid) 48% 52%, transparent 52%);
+      background-size:24px 24px;opacity:.25;pointer-events:none}
+    .card h2{margin:0;padding:16px 16px 0 16px;font-size:16px;letter-spacing:.3px;color:#d6e7ff}
+    .card .content{padding:16px}
+
+    .controls{display:grid;grid-template-columns:repeat(6, minmax(0,1fr));gap:12px}
+    .field{display:flex;flex-direction:column;gap:6px}
+    .field label{font-size:12px;color:var(--muted)}
+    .field input[type="number"], .field input[type="text"], .field select{background:var(--panel-2);border:1px solid rgba(255,255,255,.08);color:var(--text);
+      border-radius:12px;padding:10px 12px;outline:none}
+    .field input[type="checkbox"]{transform:scale(1.1)}
+
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .btn{background:linear-gradient(90deg, var(--accent-2), var(--accent));border:none;color:#03111a;padding:12px 16px;border-radius:12px;font-weight:700;cursor:pointer;
+      letter-spacing:.3px;box-shadow:0 10px 20px rgba(108,38,237,.25);} .btn:disabled{opacity:.5;cursor:not-allowed}
+    .ghost{background:transparent;color:var(--accent);border:1px solid rgba(110,231,255,.35)}
+
+    .kpis{display:grid;grid-template-columns:repeat(6, minmax(0,1fr));gap:10px}
+    .kpi{background:var(--panel-2);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:12px}
+    .kpi .label{font-size:11px;color:var(--muted)}
+    .kpi .value{font-weight:800;font-size:18px;margin-top:6px}
+    .kpi .good{color:var(--success)}
+    .kpi .bad{color:var(--danger)}
+
+    canvas{width:100%;height:280px;background:radial-gradient(1000px 600px at -10% 120%, rgba(124,58,237,.08), transparent 50%), #0b1220;
+      border-radius:14px;border:1px solid rgba(255,255,255,.06)}
+    .chartWrap{position:relative}
+    .tooltip{position:absolute;pointer-events:none;background:rgba(10,19,32,.9);border:1px solid rgba(255,255,255,.1);padding:6px 8px;border-radius:8px;color:#cfe1ff;font-size:12px;transform:translate(-50%,-120%);white-space:nowrap;display:none}
+
+    .log{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      background:#0b1220;border-radius:12px;border:1px solid rgba(255,255,255,.06);padding:12px;max-height:220px;overflow:auto;color:#cfe1ff}
+    .progress{height:8px;background:#0a1320;border-radius:999px;border:1px solid rgba(255,255,255,.06);overflow:hidden}
+    .bar{height:100%;background:linear-gradient(90deg,var(--accent-2),var(--accent));width:0%}
+
+    footer{margin:18px 0;color:var(--muted);font-size:12px}
+    .hint{color:var(--muted);font-size:12px;margin-top:8px}
+    .tag{display:inline-flex;align-items:center;gap:6px;background:#0b1220;border:1px solid rgba(110,231,255,.18);color:#9cdcff;padding:6px 10px;border-radius:999px;font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <div class="title"><span class="dot"></span><span>Martingale Streak Simulator</span></div>
+        <div class="subtitle">Wait for a loss streak, then attack with Martingale. Visualize outcomes across many trials.</div>
+      </div>
+      <span class="tag">v1.1 • 49.5% win • 2x payout</span>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Parameters</h2>
+        <div class="content">
+          <div class="controls">
+            <div class="field">
+              <label>Trials</label>
+              <input id="trials" type="number" min="1" value="200" />
+            </div>
+            <div class="field">
+              <label>Rolls per Trial</label>
+              <input id="rolls" type="number" min="100" step="100" value="20000" />
+            </div>
+            <div class="field">
+              <label>Initial Bankroll</label>
+              <input id="bankroll" type="number" min="0" step="0.01" value="100" />
+            </div>
+            <div class="field">
+              <label>Base Bet</label>
+              <input id="baseBet" type="number" min="0.001" step="0.001" value="0.02" />
+            </div>
+            <div class="field">
+              <label>Trigger Loss Streak</label>
+              <input id="trigger" type="number" min="1" value="6" />
+            </div>
+            <div class="field">
+              <label>Max Martingale Steps</label>
+              <input id="steps" type="number" min="1" value="10" />
+            </div>
+            <div class="field">
+              <label>Stop Loss per Attack</label>
+              <input id="stopLoss" type="number" min="0" step="0.01" value="2.00" />
+            </div>
+            <div class="field">
+              <label>Stop After First Win</label>
+              <select id="stopOnWin">
+                <option value="yes" selected>Yes</option>
+                <option value="no">No (complete all steps)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Win Chance</label>
+              <input id="pwin" type="number" min="0.01" max="0.99" step="0.001" value="0.495" />
+            </div>
+            <div class="field">
+              <label>Payout (even money = 1.0)</label>
+              <input id="payout" type="number" step="0.01" value="1.0" />
+            </div>
+            <div class="field">
+              <label>Random Seed (optional)</label>
+              <input id="seed" type="text" placeholder="e.g. streak-42" />
+            </div>
+            <div class="field">
+              <label>Auto Cap Bet (Bankroll)</label>
+              <select id="cap">
+                <option value="yes" selected>Yes</option>
+                <option value="no">No (allow negative)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Show One Trial Trace</label>
+              <select id="traceMode">
+                <option value="best">Best final</option>
+                <option value="median" selected>Median</option>
+                <option value="worst">Worst final</option>
+                <option value="first">First</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:14px">
+            <button id="run" class="btn">Run Simulation</button>
+            <button id="stop" class="btn ghost">Stop</button>
+            <div class="progress" style="flex:1"><div id="bar" class="bar"></div></div>
+          </div>
+          <div class="hint">Empty hands: we still roll outcomes but place no bets until a streak of N losses is observed. Then we execute a Martingale “attack”.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Key Metrics</h2>
+        <div class="content">
+          <div class="kpis">
+            <div class="kpi"><div class="label">Avg. Final P&L</div><div id="k_avg" class="value">—</div></div>
+            <div class="kpi"><div class="label">Median Final P&L</div><div id="k_med" class="value">—</div></div>
+            <div class="kpi"><div class="label">Bust Rate</div><div id="k_bust" class="value bad">—</div></div>
+            <div class="kpi"><div class="label">Avg. Attacks / 10k rolls</div><div id="k_attacks" class="value">—</div></div>
+            <div class="kpi"><div class="label">Worst Drawdown</div><div id="k_dd" class="value bad">—</div></div>
+            <div class="kpi"><div class="label">Win% During Attacks</div><div id="k_winrate" class="value good">—</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Bankroll Trace (selected trial)</h2>
+        <div class="content">
+          <div class="chartWrap">
+            <canvas id="bankrollChart" width="900" height="280"></canvas>
+            <div id="tt" class="tooltip">t: 0 • bank: 0</div>
+          </div>
+          <div class="hint">Highlighted spikes correspond to Martingale steps; flat segments are empty-hand waiting periods.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Final P&L Distribution</h2>
+        <div class="content">
+          <canvas id="hist" width="900" height="280"></canvas>
+        </div>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1;">
+        <h2>Run Log</h2>
+        <div class="content"><div id="log" class="log"></div></div>
+      </div>
+    </div>
+
+    <footer>
+      This simulator is for educational purposes only. Gambling carries risk and the house edge cannot be removed by stop/trigger filters.
+    </footer>
+  </div>
+
+  <script>
+    // ---------- Utilities ----------
+    function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296}}
+    function strHash(s){let h=1779033703^s.length;for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return (h>>>0)}
+    function quantile(arr, q){const a=[...arr].sort((x,y)=>x-y);const pos=(a.length-1)*q;const base=Math.floor(pos);const rest=pos-base;return a[base]+(a[base+1]-a[base]||0)*rest}
+
+    function drawLine(canvas, data, colorStops){
+      const ctx=canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      // axes
+      const PADL=40, PADB=30, PADT=10, PADR=10;
+      ctx.strokeStyle='rgba(255,255,255,.12)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(PADL,PADT);ctx.lineTo(PADL,canvas.height-PADB);ctx.lineTo(canvas.width-PADR,canvas.height-PADB);ctx.stroke();
+      if(!data || data.length<2) return;
+      const xs=data.map(d=>d.x), ys=data.map(d=>d.y);
+      const xmin=Math.min(...xs), xmax=Math.max(...xs);
+      const ymin=Math.min(...ys), ymax=Math.max(...ys);
+      const X=t=>PADL+((t-xmin)/(xmax-xmin||1))*(canvas.width-PADL-PADR);
+      const Y=t=>(canvas.height-PADB)-((t-ymin)/(ymax-ymin||1))*(canvas.height-PADT-PADB);
+      // ticks & numbers
+      const tf='#9fb8d0'; ctx.fillStyle=tf; ctx.font='10px ui-sans-serif, system-ui';
+      const xticks=6, yticks=6;
+      for(let i=0;i<=xticks;i++){const v=xmin+(i/xticks)*(xmax-xmin);const x=X(v);ctx.strokeStyle='rgba(255,255,255,.06)';ctx.beginPath();ctx.moveTo(x,canvas.height-PADB);ctx.lineTo(x,canvas.height-PADB+4);ctx.stroke();ctx.fillText(Math.round(v).toString(), x-8, canvas.height-12)}
+      for(let i=0;i<=yticks;i++){const v=ymin+(i/yticks)*(ymax-ymin);const y=Y(v);ctx.strokeStyle='rgba(255,255,255,.06)';ctx.beginPath();ctx.moveTo(PADL-4,y);ctx.lineTo(PADL,y);ctx.stroke();ctx.fillText(v.toFixed(2), 4, y+3)}
+      // gradient line
+      const grad=ctx.createLinearGradient(PADL,0,canvas.width-PADR,0);
+      (colorStops||[[0,'#7c3aed'],[1,'#6ee7ff']]).forEach(([p,c])=>grad.addColorStop(p,c));
+      ctx.strokeStyle=grad;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(X(data[0].x),Y(data[0].y));
+      for(let i=1;i<data.length;i++){ctx.lineTo(X(data[i].x),Y(data[i].y));}
+      ctx.stroke();
+      // last point marker
+      const lp=data[data.length-1]; ctx.fillStyle='#6ee7ff'; ctx.beginPath(); ctx.arc(X(lp.x),Y(lp.y),2.5,0,Math.PI*2); ctx.fill();
+      // simple hover tooltip
+      const tt=document.getElementById('tt');
+      canvas.onmousemove=(ev)=>{const rect=canvas.getBoundingClientRect(); const cx=ev.clientX-rect.left; const rel=(cx-PADL)/(canvas.width-PADL-PADR); const idx=Math.max(0,Math.min(data.length-1, Math.round(rel*(data.length-1)))); const p=data[idx]; const px=X(p.x), py=Y(p.y); tt.style.left=px+'px'; tt.style.top=py+'px'; tt.textContent=`t: ${p.x} • bank: ${p.y.toFixed(2)}`; tt.style.display='block';}
+      canvas.onmouseleave=()=>{tt.style.display='none'}
+    }
+
+    function drawHist(canvas, values, bins=40){
+      const ctx=canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.strokeStyle='rgba(255,255,255,.12)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(40,10);ctx.lineTo(40,canvas.height-30);ctx.lineTo(canvas.width-10,canvas.height-30);ctx.stroke();
+      if(!values.length) return;
+      const min=Math.min(...values), max=Math.max(...values);
+      const step=(max-min||1)/bins;const counts=new Array(bins).fill(0);
+      for(const v of values){let idx=Math.floor((v-min)/step);if(idx>=bins)idx=bins-1;counts[idx]++;}
+      const maxC=Math.max(...counts);
+      const barW=(canvas.width-60)/bins;
+      for(let i=0;i<bins;i++){
+        const h=((counts[i]/maxC)||0)*(canvas.height-40);
+        const x=40+i*barW;const y=(canvas.height-30)-h;
+        const g=ctx.createLinearGradient(x,0,x+barW,0);
+        g.addColorStop(0,'#7c3aed');g.addColorStop(1,'#6ee7ff');
+        ctx.fillStyle=g;ctx.fillRect(x,y,barW-1,h);
+      }
+    }
+
+    function log(msg){const el=document.getElementById('log');const time=new Date().toLocaleTimeString();el.innerHTML = `[${time}] ${msg}<br>` + el.innerHTML}
+    function setBar(p){document.getElementById('bar').style.width = `${Math.max(0,Math.min(100,p))}%`}
+
+    // ---------- Core Simulation ----------
+    function simulateTrial(cfg, rng){
+      const {rolls, initBank, baseBet, trigger, steps, pWin, payout, stopOnWin, cap, stopLoss} = cfg;
+      let bank=initBank; let consecLosses=0; let attacking=false; let stepIdx=0; let currentBet=baseBet; let attackPnL=0;
+      const trace=[{x:0, y:bank}];
+      let attacks=0, attackWins=0, attackLosses=0, maxDD=0, peak=bank;
+
+      for(let i=1;i<=rolls;i++){
+        const roll = rng() < pWin; // true = win
+        if(!attacking){
+          if(roll){consecLosses=0;} else {consecLosses++;}
+          if(consecLosses>=trigger){
+            attacking=true; stepIdx=0; currentBet=baseBet; consecLosses=0; attackPnL=0; attacks++;
+          }
+          trace.push({x:i, y:bank});
+        } else {
+          const stake = cap ? Math.min(currentBet, bank) : currentBet;
+          bank -= stake; let delta = -stake;
+          const res = roll;
+          if(res){
+            const winAmt = stake * (1 + payout);
+            bank += winAmt; delta += winAmt; attackWins++; stepIdx++;
+            if(stopOnWin){attacking=false;} else { currentBet = baseBet; }
+          } else {
+            attackLosses++; stepIdx++; currentBet *= 2;
+          }
+          attackPnL += delta;
+          if(stepIdx>=steps || (stopLoss>0 && attackPnL <= -stopLoss)) { attacking=false; }
+          trace.push({x:i, y:bank});
+        }
+        if(bank>peak) peak=bank; maxDD=Math.min(maxDD, bank-peak);
+      }
+      return {finalBank:bank, pnl: bank - initBank, trace, attacks, attackWins, attackLosses, maxDD};
+    }
+
+    async function runSim(){
+      const trials = +document.getElementById('trials').value;
+      const rolls = +document.getElementById('rolls').value;
+      const initBank = +document.getElementById('bankroll').value;
+      const baseBet = +document.getElementById('baseBet').value;
+      const trigger = +document.getElementById('trigger').value;
+      const steps = +document.getElementById('steps').value;
+      const pWin = +document.getElementById('pwin').value;
+      const payout = +document.getElementById('payout').value;
+      const stopLoss = +document.getElementById('stopLoss').value;
+      const stopOnWin = document.getElementById('stopOnWin').value==='yes';
+      const cap = document.getElementById('cap').value==='yes';
+      const seedStr = document.getElementById('seed').value.trim();
+      const traceMode = document.getElementById('traceMode').value;
+
+      const seedBase = seedStr? strHash(seedStr) : Math.floor(Math.random()*1e9);
+      const rng = mulberry32(seedBase);
+
+      log(`Starting ${trials} trials × ${rolls} rolls (seed ${seedBase}). Trigger ${trigger}L → up to ${steps} Martingale steps.`);
+
+      const results=[]; const pnls=[]; let totalAttacks=0, totalWin=0, totalLoss=0; let busts=0;
+      let bestIdx=0, worstIdx=0;
+
+      for(let t=0;t<trials;t++){
+        const rlocal = mulberry32(seedBase + t*0x9e3779b1);
+        const res = simulateTrial({rolls, initBank, baseBet, trigger, steps, pWin, payout, stopOnWin, cap, stopLoss}, rlocal);
+        results.push(res); pnls.push(res.pnl);
+        totalAttacks += res.attacks; totalWin += res.attackWins; totalLoss += res.attackLosses;
+        if(res.finalBank < baseBet && cap) busts++;
+        if(pnls[t] > pnls[bestIdx]) bestIdx=t; if(pnls[t] < pnls[worstIdx]) worstIdx=t;
+        if((t+1)%10===0 || t===trials-1){setBar(((t+1)/trials)*100); await new Promise(r=>setTimeout(r,0));}
+      }
+
+      const avg = pnls.reduce((a,b)=>a+b,0)/pnls.length;
+      const med = quantile(pnls, .5);
+      const bustRate = (busts/trials)*100;
+      const attacksPer10k = (totalAttacks/trials)/(rolls/10000);
+      const avgDD = results.reduce((a,r)=>a+r.maxDD,0)/results.length;
+      const winRate = totalWin/(totalWin+totalLoss||1)*100;
+
+      document.getElementById('k_avg').textContent = (avg>=0?'+':'')+avg.toFixed(2);
+      document.getElementById('k_med').textContent = (med>=0?'+':'')+med.toFixed(2);
+      document.getElementById('k_bust').textContent = bustRate.toFixed(1)+'%';
+      document.getElementById('k_attacks').textContent = attacksPer10k.toFixed(2);
+      document.getElementById('k_dd').textContent = avgDD.toFixed(2);
+      document.getElementById('k_winrate').textContent = winRate.toFixed(1)+'%';
+
+      let idx=0;
+      if(traceMode==='best') idx=bestIdx; else if(traceMode==='worst') idx=worstIdx; else if(traceMode==='median'){
+        const sorted=pnls.map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v); idx=sorted[Math.floor(sorted.length/2)].i;
+      } else idx=0;
+
+      const trace = results[idx].trace.map((p,i)=>({x:i,y:p.y}));
+      drawLine(document.getElementById('bankrollChart'), trace);
+      drawHist(document.getElementById('hist'), pnls, 50);
+
+      log(`Done. Avg P&L ${avg.toFixed(2)}, median ${med.toFixed(2)}, bust ${bustRate.toFixed(1)}%, attacks/10k ${attacksPer10k.toFixed(2)}, attack win% ${winRate.toFixed(1)}.`);
+    }
+
+    // ---------- Self-tests (basic) ----------
+    (function selfTests(){
+      try{
+        const tmp = simulateTrial({rolls:100, initBank:10, baseBet:0.02, trigger:3, steps:5, pWin:0.495, payout:1.0, stopOnWin:true, cap:true, stopLoss:1.0}, mulberry32(123));
+        if(!Array.isArray(tmp.trace) || tmp.trace.length<2) throw new Error('Trace not populated');
+        if(Number.isNaN(tmp.pnl)) throw new Error('PnL is NaN');
+        log('Self-tests passed ✔');
+      }catch(e){
+        log('Self-tests failed ✖: '+e.message);
+        console.error(e);
+      }
+    })();
+
+    // ---------- Wire up ----------
+    document.getElementById('run').addEventListener('click',()=>{ setBar(0); runSim(); });
+    document.getElementById('stop').addEventListener('click',()=>{ log('Stop requested (reserved for chunked runs).')});
+  </script>
+</body>
+</html>
